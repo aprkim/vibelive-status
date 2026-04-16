@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="https://vibelive.site/img/favicon-vibelive.png" type="image/png">
+  <title>Status — VibeLive</title>
+  <meta name="description" content="VibeLive system status — current uptime, incidents, and maintenance.">
+  <script>
+  (function(){
+    var saved = localStorage.getItem('vl-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', saved);
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  })();
+  </script>
+  <style>
+    :root {
+      --bg: #060606; --card: #0a0a0a; --card-alt2: #0c0c0c;
+      --border: #1a1a1a; --border-visible: #333;
+      --text: #fff; --text-secondary: #9ca3af; --text-muted: #6b7280;
+      --accent: #0EA5A4; --accent-hover: #0d9488;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    [data-theme="light"] {
+      --bg: #ffffff; --card: #f9fafb; --card-alt2: #f3f4f6;
+      --border: #e5e7eb; --border-visible: #e5e7eb;
+      --text: #111827; --text-secondary: #4b5563; --text-muted: #6b7280;
+      --accent: #0d9488;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text); font-family: var(--sans);
+      -webkit-font-smoothing: antialiased; min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-logo { height: 22px; }
+    [data-theme="dark"] .header-logo-light { display: none; }
+    [data-theme="light"] .header-logo-dark { display: none; }
+    .header-back {
+      font-size: 13px; color: var(--accent); text-decoration: none;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .header-back:hover { opacity: 0.8; }
+
+    /* Theme toggle */
+    .theme-toggle {
+      position: fixed; bottom: 20px; right: 20px; z-index: 100;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--card); border: 1px solid var(--border-visible);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted); transition: border-color 0.15s;
+    }
+    .theme-toggle:hover { border-color: var(--accent); color: var(--text); }
+    [data-theme="dark"] .theme-icon-dark { display: none; }
+    [data-theme="light"] .theme-icon-light { display: none; }
+
+    /* Status page */
+    .status-page {
+      max-width: 720px; width: 100%;
+      margin: 0 auto; padding: 64px 24px 96px;
+      flex: 1;
+    }
+    .status-header { margin-bottom: 40px; }
+    .status-header h1 { font-size: 1.75rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .status-header p { font-size: 14px; color: var(--text-muted); }
+
+    /* Banner */
+    .status-banner {
+      border-radius: 12px; padding: 20px 24px; margin-bottom: 32px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .status-banner.operational { background: rgba(52,211,153,0.08); border: 1.5px solid rgba(52,211,153,0.25); }
+    .status-banner.degraded { background: rgba(251,191,36,0.08); border: 1.5px solid rgba(251,191,36,0.25); }
+    .status-banner.partial { background: rgba(251,146,60,0.08); border: 1.5px solid rgba(251,146,60,0.25); }
+    .status-banner.major { background: rgba(248,113,113,0.08); border: 1.5px solid rgba(248,113,113,0.25); }
+    .status-banner.maintenance { background: rgba(96,165,250,0.08); border: 1.5px solid rgba(96,165,250,0.25); }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.operational { background: #34d399; box-shadow: 0 0 8px rgba(52,211,153,0.4); }
+    .status-dot.degraded { background: #fbbf24; box-shadow: 0 0 8px rgba(251,191,36,0.4); }
+    .status-dot.partial { background: #fb923c; box-shadow: 0 0 8px rgba(251,146,60,0.4); }
+    .status-dot.major { background: #f87171; box-shadow: 0 0 8px rgba(248,113,113,0.4); }
+    .status-dot.maintenance { background: #60a5fa; box-shadow: 0 0 8px rgba(96,165,250,0.4); }
+    .status-banner-text { font-size: 16px; font-weight: 600; color: var(--text); }
+    .status-updated { margin-left: auto; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+    /* Section titles */
+    .status-section-title {
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 12px;
+    }
+
+    /* Components */
+    .status-components { border-radius: 12px; border: 1.5px solid var(--border-visible); overflow: hidden; margin-bottom: 40px; }
+    .status-component {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+    }
+    .status-component:last-child { border-bottom: none; }
+    .status-component-name { font-size: 14px; font-weight: 500; color: var(--text); }
+    .status-component-right { display: flex; align-items: center; gap: 8px; }
+    .status-component-label { font-size: 12px; color: var(--text-muted); }
+    .status-component-label.operational { color: #34d399; }
+    .status-component-label.degraded { color: #fbbf24; }
+    .status-component-label.partial { color: #fb923c; }
+    .status-component-label.major { color: #f87171; }
+    .status-component-label.maintenance { color: #60a5fa; }
+    .status-component-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-component-dot.operational { background: #34d399; }
+    .status-component-dot.degraded { background: #fbbf24; }
+    .status-component-dot.partial { background: #fb923c; }
+    .status-component-dot.major { background: #f87171; }
+    .status-component-dot.maintenance { background: #60a5fa; }
+
+    /* Incidents */
+    .status-incidents { margin-bottom: 40px; }
+    .status-incident {
+      border-radius: 12px; border: 1.5px solid var(--border-visible);
+      padding: 16px 20px; margin-bottom: 12px; cursor: pointer;
+    }
+    .status-incident:hover { border-color: #444; }
+    [data-theme="light"] .status-incident:hover { border-color: #d1d5db; }
+    .status-incident-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .status-incident-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .status-incident-title { font-size: 14px; font-weight: 500; color: var(--text); }
+    .status-badge {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .status-badge.resolved { background: rgba(52,211,153,0.12); color: #34d399; }
+    .status-badge.monitoring { background: rgba(96,165,250,0.12); color: #60a5fa; }
+    .status-badge.investigating { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .status-badge.identified { background: rgba(251,146,60,0.12); color: #fb923c; }
+    .status-incident-time { font-size: 12px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .status-incident-body { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .status-incident.open .status-incident-body { display: block; }
+    .status-incident-update { margin-bottom: 10px; padding-left: 12px; border-left: 2px solid var(--border); }
+    .status-incident-update:last-child { margin-bottom: 0; }
+    .status-incident-update-time { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+    .status-incident-update-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+    .status-incident-chevron { color: var(--text-muted); flex-shrink: 0; transition: transform 0.15s; }
+    .status-incident.open .status-incident-chevron { transform: rotate(90deg); }
+
+    /* Maintenance */
+    .status-maint-card {
+      border-radius: 12px; border: 1.5px solid rgba(96,165,250,0.25);
+      background: rgba(96,165,250,0.04); padding: 16px 20px; margin-bottom: 12px;
+    }
+    .status-maint-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+    .status-maint-title { font-size: 14px; font-weight: 500; color: var(--text); }
+    .status-maint-window { font-size: 12px; color: #60a5fa; white-space: nowrap; }
+    .status-maint-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+    /* Empty */
+    .status-empty {
+      text-align: center; padding: 24px; font-size: 13px; color: var(--text-muted);
+      border-radius: 12px; border: 1.5px solid var(--border-visible);
+    }
+
+    /* Anchor */
+    .status-anchor {
+      color: var(--text-muted); text-decoration: none; opacity: 0;
+      margin-left: 6px; font-size: 12px; transition: opacity 0.15s;
+    }
+    .status-incident:hover .status-anchor { opacity: 1; }
+    .status-anchor:hover { color: var(--accent); }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid var(--border); padding: 24px;
+      text-align: center; font-size: 12px; color: var(--text-muted);
+    }
+    .footer a { color: var(--accent); text-decoration: none; }
+    .footer a:hover { opacity: 0.8; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <a href="https://vibelive.site" class="header-left">
+    <img src="https://vibelive.site/img/vibelive-logo.png" alt="VibeLive" class="header-logo header-logo-dark">
+    <img src="https://vibelive.site/img/vibelive-black-vw.png" alt="VibeLive" class="header-logo header-logo-light">
+  </a>
+  <a href="https://vibelive.site" class="header-back">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+    vibelive.site
+  </a>
+</header>
+
+<main>
+  <div class="status-page">
+    <div class="status-header">
+      <h1>VibeLive Status</h1>
+      <p>Current system status and incident updates.</p>
+    </div>
+
+    <div id="status-banner" class="status-banner operational">
+      <span id="status-banner-dot" class="status-dot operational"></span>
+      <span id="status-banner-text" class="status-banner-text">Loading...</span>
+      <span id="status-updated" class="status-updated"></span>
+    </div>
+
+    <p class="status-section-title">Components</p>
+    <div id="status-components" class="status-components">
+      <div class="status-component"><span class="status-component-name" style="color:var(--text-muted);">Loading...</span></div>
+    </div>
+
+    <div id="status-maintenance-section" style="display:none;">
+      <p class="status-section-title">Scheduled Maintenance</p>
+      <div id="status-maintenance"></div>
+    </div>
+
+    <p class="status-section-title">Recent Incidents</p>
+    <div id="status-incidents"><div class="status-empty">Loading...</div></div>
+  </div>
+</main>
+
+<footer class="footer">
+  <a href="https://vibelive.site">vibelive.site</a>
+</footer>
+
+<!-- Theme toggle -->
+<button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+  <svg class="theme-icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  <svg class="theme-icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+</button>
+
+<script>
+(function() {
+  var STATUS_URL = 'status.json';
+
+  var statusLabels = {
+    operational: "Operational",
+    degraded: "Degraded Performance",
+    partial: "Partial Outage",
+    major: "Major Outage",
+    maintenance: "Under Maintenance"
+  };
+
+  function updateTimestamp() {
+    document.getElementById('status-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function render(data) {
+    var banner = document.getElementById('status-banner');
+    var bannerDot = document.getElementById('status-banner-dot');
+    var bannerText = document.getElementById('status-banner-text');
+    banner.className = 'status-banner ' + data.overall;
+    bannerDot.className = 'status-dot ' + data.overall;
+    bannerText.textContent = data.overallText;
+
+    var compEl = document.getElementById('status-components');
+    var compHtml = '';
+    (data.components || []).forEach(function(c) {
+      var label = statusLabels[c.status] || c.status;
+      compHtml += '<div class="status-component">' +
+        '<span class="status-component-name">' + c.name + '</span>' +
+        '<div class="status-component-right">' +
+          (c.detail ? '<span style="font-size:12px;color:var(--text-muted);">' + c.detail + '</span>' : '') +
+          '<span class="status-component-label ' + c.status + '">' + label + '</span>' +
+          '<span class="status-component-dot ' + c.status + '"></span>' +
+        '</div>' +
+      '</div>';
+    });
+    compEl.innerHTML = compHtml;
+
+    var maintSection = document.getElementById('status-maintenance-section');
+    var maintEl = document.getElementById('status-maintenance');
+    if (data.maintenance && data.maintenance.length > 0) {
+      maintSection.style.display = '';
+      var maintHtml = '';
+      data.maintenance.forEach(function(m) {
+        maintHtml += '<div class="status-maint-card">' +
+          '<div class="status-maint-header">' +
+            '<span class="status-maint-title">' + m.title + '</span>' +
+            '<span class="status-maint-window">' + m.window + '</span>' +
+          '</div>' +
+          '<p class="status-maint-desc">' + m.description + '</p>' +
+        '</div>';
+      });
+      maintEl.innerHTML = maintHtml;
+    } else {
+      maintSection.style.display = 'none';
+    }
+
+    var incEl = document.getElementById('status-incidents');
+    if (!data.incidents || data.incidents.length === 0) {
+      incEl.innerHTML = '<div class="status-empty">No recent incidents.</div>';
+    } else {
+      var incHtml = '';
+      data.incidents.forEach(function(inc) {
+        var updatesHtml = '';
+        (inc.updates || []).forEach(function(u) {
+          updatesHtml += '<div class="status-incident-update">' +
+            '<div class="status-incident-update-time">' + u.time + '</div>' +
+            '<div class="status-incident-update-text">' + u.text + '</div>' +
+          '</div>';
+        });
+        incHtml += '<div class="status-incident" id="' + inc.id + '" onclick="this.classList.toggle(\'open\')">' +
+          '<div class="status-incident-header">' +
+            '<div class="status-incident-left">' +
+              '<span class="status-incident-title">' + inc.title +
+                '<a href="#' + inc.id + '" class="status-anchor" onclick="event.stopPropagation();navigator.clipboard.writeText(window.location.origin+window.location.pathname+\'#' + inc.id + '\');">#</a>' +
+              '</span>' +
+              '<span class="status-badge ' + inc.status + '">' + inc.status + '</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span class="status-incident-time">' + inc.time + '</span>' +
+              '<svg class="status-incident-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>' +
+            '</div>' +
+          '</div>' +
+          '<div class="status-incident-body">' + updatesHtml + '</div>' +
+        '</div>';
+      });
+      incEl.innerHTML = incHtml;
+
+      if (window.location.hash) {
+        var target = document.getElementById(window.location.hash.substring(1));
+        if (target) target.classList.add('open');
+      }
+    }
+
+    updateTimestamp();
+  }
+
+  function loadStatus() {
+    fetch(STATUS_URL + '?t=' + Date.now())
+      .then(function(r) { return r.json(); })
+      .then(render)
+      .catch(function() { updateTimestamp(); });
+  }
+
+  loadStatus();
+  setInterval(loadStatus, 60000);
+
+  // Theme toggle
+  document.getElementById('theme-toggle').addEventListener('click', function() {
+    var html = document.documentElement;
+    var next = (html.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('vl-theme', next);
+  });
+})();
+</script>
+</body>
+</html>

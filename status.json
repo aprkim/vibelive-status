@@ -1,0 +1,13 @@
+{
+  "overall": "operational",
+  "overallText": "All Systems Operational",
+  "components": [
+    { "name": "API",            "status": "operational", "detail": "" },
+    { "name": "Live Rooms",     "status": "operational", "detail": "" },
+    { "name": "Console",        "status": "operational", "detail": "" },
+    { "name": "Authentication", "status": "operational", "detail": "" },
+    { "name": "Docs",           "status": "operational", "detail": "" }
+  ],
+  "maintenance": [],
+  "incidents": []
+}
