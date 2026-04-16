@@ -97,6 +97,11 @@ jobs:
           echo ""
           echo "Overall: $OVERALL — $OVERALL_TEXT"
 
+          # Save for later steps
+          echo "ANY_DOWN=$ANY_DOWN" >> $GITHUB_ENV
+          echo "OVERALL=$OVERALL" >> $GITHUB_ENV
+          echo "OVERALL_TEXT=$OVERALL_TEXT" >> $GITHUB_ENV
+
       - name: Commit and push if changed
         run: |
           git config user.name "VibeLive Status Bot"
@@ -108,3 +113,9 @@ jobs:
             git commit -m "Auto-update: $(date -u '+%Y-%m-%d %H:%M UTC')"
             git push
           fi
+
+      - name: Fail workflow if any service is down
+        if: env.ANY_DOWN == 'true'
+        run: |
+          echo "::error::${{ env.OVERALL_TEXT }} — One or more services are not responding. Check https://status.vibelive.site"
+          exit 1
