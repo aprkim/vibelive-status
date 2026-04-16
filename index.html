@@ -273,6 +273,8 @@
   }
 
   function render(data) {
+    window._lastMaintenance = data.maintenance || [];
+    window._lastIncidents = data.incidents || [];
     var banner = document.getElementById('status-banner');
     var bannerDot = document.getElementById('status-banner-dot');
     var bannerText = document.getElementById('status-banner-text');
@@ -361,15 +363,45 @@
       .catch(function() { updateTimestamp(); });
   }
 
+  var LIVE_CHECKS = [
+    { name: "API",            url: "https://vibelive.site/pricing" },
+    { name: "Live Rooms",     url: "https://vibelive.site" },
+    { name: "Console",        url: "https://console.vibelive.site" },
+    { name: "Authentication", url: "https://vibelive.site/login" },
+    { name: "Docs",           url: "https://docs.vibelive.site" }
+  ];
+
   window.refreshStatus = function() {
     var btn = document.getElementById('status-refresh');
     btn.classList.add('spinning');
     btn.disabled = true;
-    loadStatus();
-    setTimeout(function() {
+
+    var checks = LIVE_CHECKS.map(function(c) {
+      return fetch(c.url, { mode: 'no-cors', cache: 'no-store' })
+        .then(function() { return { name: c.name, status: 'operational', detail: '' }; })
+        .catch(function() { return { name: c.name, status: 'major', detail: '' }; });
+    });
+
+    Promise.all(checks).then(function(components) {
+      var downCount = components.filter(function(c) { return c.status === 'major'; }).length;
+      var overall, overallText;
+      if (downCount === 0) { overall = 'operational'; overallText = 'All Systems Operational'; }
+      else if (downCount === components.length) { overall = 'major'; overallText = 'Major Outage'; }
+      else if (downCount >= 2) { overall = 'partial'; overallText = 'Partial Outage'; }
+      else { overall = 'degraded'; overallText = 'Degraded Performance'; }
+
+      // Preserve incidents and maintenance from last JSON load
+      var data = {
+        overall: overall,
+        overallText: overallText,
+        components: components,
+        maintenance: window._lastMaintenance || [],
+        incidents: window._lastIncidents || []
+      };
+      render(data);
       btn.classList.remove('spinning');
       btn.disabled = false;
-    }, 800);
+    });
   };
 
   loadStatus();
