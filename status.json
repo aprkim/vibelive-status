@@ -1,30 +1,30 @@
 {
-  "overall": "operational",
-  "overallText": "All Systems Operational",
+  "overall": "major",
+  "overallText": "Major Outage",
   "components": [
     {
       "name": "API",
-      "status": "operational",
+      "status": "major",
       "detail": ""
     },
     {
       "name": "Live Rooms",
-      "status": "operational",
+      "status": "major",
       "detail": ""
     },
     {
       "name": "Console",
-      "status": "operational",
+      "status": "major",
       "detail": ""
     },
     {
       "name": "Authentication",
-      "status": "operational",
+      "status": "major",
       "detail": ""
     },
     {
       "name": "Docs",
-      "status": "operational",
+      "status": "major",
       "detail": ""
     }
   ],
