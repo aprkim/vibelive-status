@@ -22,7 +22,7 @@ jobs:
           # Define endpoints to check
           # Format: "name|url|component_index"
           CHECKS=(
-            "API|https://vibelive.site/api/createTrialProject.jsp|0"
+            "API|https://vibelive.site/pricing|0"
             "Live Rooms|https://vibelive.site|1"
             "Console|https://console.vibelive.site|2"
             "Authentication|https://vibelive.site/login|3"
