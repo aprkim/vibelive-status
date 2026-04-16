@@ -1,0 +1,110 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Every 5 minutes
+  workflow_dispatch:        # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run health checks and update status
+        run: |
+          #!/bin/bash
+          set -e
+
+          # Define endpoints to check
+          # Format: "name|url|component_index"
+          CHECKS=(
+            "API|https://vibelive.site/api/createTrialProject.jsp|0"
+            "Live Rooms|https://vibelive.site|1"
+            "Console|https://console.vibelive.site|2"
+            "Authentication|https://vibelive.site/login|3"
+            "Docs|https://docs.vibelive.site|4"
+          )
+
+          # Check each endpoint (just HTTP response, not content)
+          declare -A RESULTS
+          ANY_DOWN=false
+
+          for check in "${CHECKS[@]}"; do
+            IFS='|' read -r name url idx <<< "$check"
+            status_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")
+
+            if [ "$status_code" -ge 200 ] && [ "$status_code" -lt 400 ]; then
+              RESULTS[$idx]="operational"
+              echo "✓ $name ($url) — $status_code"
+            else
+              RESULTS[$idx]="major"
+              ANY_DOWN=true
+              echo "✗ $name ($url) — $status_code"
+            fi
+          done
+
+          # Determine overall status
+          DOWN_COUNT=0
+          for idx in "${!RESULTS[@]}"; do
+            if [ "${RESULTS[$idx]}" = "major" ]; then
+              DOWN_COUNT=$((DOWN_COUNT + 1))
+            fi
+          done
+
+          TOTAL=${#CHECKS[@]}
+          if [ "$DOWN_COUNT" -eq 0 ]; then
+            OVERALL="operational"
+            OVERALL_TEXT="All Systems Operational"
+          elif [ "$DOWN_COUNT" -eq "$TOTAL" ]; then
+            OVERALL="major"
+            OVERALL_TEXT="Major Outage"
+          elif [ "$DOWN_COUNT" -ge 2 ]; then
+            OVERALL="partial"
+            OVERALL_TEXT="Partial Outage"
+          else
+            OVERALL="degraded"
+            OVERALL_TEXT="Degraded Performance"
+          fi
+
+          # Read existing status.json to preserve incidents and maintenance
+          EXISTING_INCIDENTS=$(cat status.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('incidents',[])))" 2>/dev/null || echo "[]")
+          EXISTING_MAINTENANCE=$(cat status.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('maintenance',[])))" 2>/dev/null || echo "[]")
+
+          # Build new status.json
+          cat > status.json << STATUSEOF
+          {
+            "overall": "$OVERALL",
+            "overallText": "$OVERALL_TEXT",
+            "components": [
+              { "name": "API",            "status": "${RESULTS[0]:-operational}", "detail": "" },
+              { "name": "Live Rooms",     "status": "${RESULTS[1]:-operational}", "detail": "" },
+              { "name": "Console",        "status": "${RESULTS[2]:-operational}", "detail": "" },
+              { "name": "Authentication", "status": "${RESULTS[3]:-operational}", "detail": "" },
+              { "name": "Docs",           "status": "${RESULTS[4]:-operational}", "detail": "" }
+            ],
+            "maintenance": $EXISTING_MAINTENANCE,
+            "incidents": $EXISTING_INCIDENTS
+          }
+          STATUSEOF
+
+          # Clean up indentation from heredoc
+          python3 -c "import json; f=open('status.json'); d=json.load(f); f.close(); open('status.json','w').write(json.dumps(d, indent=2) + '\n')"
+
+          echo ""
+          echo "Overall: $OVERALL — $OVERALL_TEXT"
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "VibeLive Status Bot"
+          git config user.email "status-bot@vibelive.site"
+          git add status.json
+          if git diff --cached --quiet; then
+            echo "No changes to status.json"
+          else
+            git commit -m "Auto-update: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
