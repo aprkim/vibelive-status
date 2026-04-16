@@ -1,10 +1,10 @@
 {
-  "overall": "degraded",
-  "overallText": "Degraded Performance",
+  "overall": "operational",
+  "overallText": "All Systems Operational",
   "components": [
     {
       "name": "API",
-      "status": "major",
+      "status": "operational",
       "detail": ""
     },
     {
